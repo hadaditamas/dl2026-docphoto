@@ -25,7 +25,21 @@ import torch.nn as nn
 class MLP(nn.Module):
     def __init__(self, in_dim: int, hidden: list[int], dropout: float = 0.3, prior: float = 0.5):
         super().__init__()
-        raise NotImplementedError("TASK 2: build the layers")
+        layers: list[nn.Module] = []
+        width = in_dim
+        for h in hidden:
+            # one block per hidden layer: Linear -> ReLU -> Dropout
+            layers += [nn.Linear(width, h), nn.ReLU(), nn.Dropout(dropout)]
+            width = h
+        self.body = nn.Sequential(*layers)
+        self.head = nn.Linear(width, 1)
+
+        # The sigmoid keeps the output in [0, 1]. Starting the output bias at
+        # logit(prior) makes the untrained network predict the training mean,
+        # i.e. it starts where the constant predictor is, not at 0.5.
+        p = min(max(prior, 1e-4), 1 - 1e-4)
+        with torch.no_grad():
+            self.head.bias.fill_(float(torch.logit(torch.tensor(p))))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError("TASK 2: one number in [0, 1] per row, shape (batch,)")
+        return torch.sigmoid(self.head(self.body(x))).squeeze(-1)
